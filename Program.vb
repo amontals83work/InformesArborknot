@@ -59,7 +59,7 @@ Module Program
     Function resultadoAccion(resultado As Integer) As String
         Select Case resultado
             Case 4
-                Return "Hardship"
+                Return "Hold" ' "Hardship"
             Case 6
                 Return "Disputed"
             Case 8
@@ -67,7 +67,7 @@ Module Program
             Case 9
                 Return "Bankruptcy"
             Case 13, 15
-                Return "Cease and Desist"
+                Return "Fraud" ' "Cease and Desist"
             Case Else
                 Return "Active"
         End Select
@@ -81,12 +81,11 @@ Module Program
     End Function
 
     Sub Main(args As String())
-        'Dim idTipoNota As Object, idResultado As Object, debtStatusID As String, observaciones As String
-        'Dim messageId As Object, idTipoAccion As Object, channelId As String
-        'Dim cmdRecibos As New SqlCommand
-        'Dim readerAux1 As SqlDataReader, readerAux2 As SqlDataReader, readerAux3 As SqlDataReader, readerAux4 As SqlDataReader
+
         Dim count As Integer = 0
-        Dim internatDebtId As Object, bookId As Object, originalAcountId As Object, fecha As Object, formatFecha As String, pagado As Object, anyo As String, mes As String, dia As String, hora As String
+        Dim internatDebtId As Object, bookId As Object, originalAcountId As Object, formatFecha As String, fecha As Object, pagado As Object, anyo As String, mes As String, dia As String, hora As String
+        Dim idTipoNota As Object, idResultado As Object, debtStatusID As String, observaciones As String
+        Dim messageId As Object, idTipoAccion As Object, channelId As String
         Dim stopwatch As New Stopwatch()
         Dim ts As TimeSpan
         Dim elapsedTime As String = ""
@@ -94,8 +93,11 @@ Module Program
 
         Dim connectionString As String = "Data Source=192.168.50.48;Initial Catalog=DespachoMc;Persist Security Info=True;User ID=sa;Password=Binabiq2018_;MultipleActiveResultSets=True;"
         Dim path As String = "\\192.168.50.46\e\Alfonso\Informes Diarios Arborknot" '\Historicos" 'Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-        'Dim today As String = Date.Today.ToString("yyyyMMdd")
-        Dim today As String = "Pagantis"
+        'Dim today As String = Date.Today.ToString("yyyyddMM")
+        Dim today As String = "20242606"
+        Dim clientes As String = "84,85,86,87,89,90,91,92,93"
+        Dim fechaIni As String = "26/06/2024"
+        Dim fechaFin As String = "27/06/2024"
         If Not Directory.Exists(path & "\" & today) Then
             Directory.CreateDirectory(path & "\" & today)
             path = path & "\" & today
@@ -104,39 +106,42 @@ Module Program
         End If
 
         ' COLLECTION /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
         Dim writerColl As New StreamWriter(IO.Path.Combine(path, "Daily_collection_report_MC2Legal_" & today & ".csv"))
         writerColl.WriteLine("Payment ID,InternalBookID,InternalDebtID,OriginalAccountID,Timestamp,Amount")
 
         Dim queryCollection As String = "SELECT I.IdIncidencia, I.IdExpediente, I.Pagado, I.Fecha, 
-                                        (SELECT NumFactura FROM Recibos WHERE IdExpediente = I.IdExpediente) as NumFactura,
-                                        (SELECT codigobarras FROM Recibos WHERE IdExpediente = I.IdExpediente) as codigobarras,
-                                        (SELECT url FROM Recibos WHERE IdExpediente = I.IdExpediente) as url FROM Incidencias I INNER JOIN Expedientes E ON I.IdExpediente = E.IdExpediente 
-                                        WHERE CONVERT(DATE,Fecha) >= '24/05/2024' AND CONVERT(DATE,Fecha) < '25/05/2024' AND E.idCliente=89 ORDER BY Fecha ASC"
+                                            (SELECT NumFactura FROM Recibos WHERE IdExpediente = I.IdExpediente) as NumFactura,
+                                            (SELECT codigobarras FROM Recibos WHERE IdExpediente = I.IdExpediente) as codigobarras,
+                                            (SELECT url FROM Recibos WHERE IdExpediente = I.IdExpediente) as url 
+                                        FROM Incidencias I INNER JOIN Expedientes E ON I.IdExpediente = E.IdExpediente 
+                                        WHERE CONVERT(DATE,Fecha) >= '" + fechaIni + "' AND CONVERT(DATE,Fecha) < '" + fechaFin + "' AND E.idCliente IN (" + clientes + ") ORDER BY Fecha ASC"
+        'Fecha >= CAST(GETDATE() AS DATE) AND E.idCliente IN (" + clientes + ")
         Using conn As New SqlConnection(connectionString)
             Using cmd As New SqlCommand(queryCollection, conn)
                 conn.Open()
-                Dim adCollection As New SqlDataAdapter(cmd)
-                Dim dsCollection As New DataSet()
-                adCollection.Fill(dsCollection, "Incidencias")
+                Dim adapter As New SqlDataAdapter(cmd)
+                Dim dataset As New DataSet()
+                adapter.Fill(dataset, "Incidencias")
 
-                For Each row As DataRow In dsCollection.Tables("Incidencias").Rows
+                For Each row As DataRow In dataset.Tables("Incidencias").Rows
                     Dim idExpediente = row("IdExpediente").ToString()
-                    originalAcountId = row("NumFactura").ToString()
-                    bookId = row("codigobarras").ToString()
-                    internatDebtId = row("url").ToString()
+                    originalAcountId = If(row("NumFactura") Is DBNull.Value, "", row("NumFactura").Replace(",", "."))
+                    bookId = If(row("codigobarras") Is Nothing, "", row("codigobarras"))
+                    internatDebtId = If(row("url") Is DBNull.Value, "", row("url").Replace(",", "."))
+                    pagado = If(row("Pagado") Is Nothing, "", formatPagado(row("Pagado").ToString().Replace(",", ".")))
 
-                    'fecha = If(row("Fecha") Is Nothing, "", row("Fecha").ToString().Replace("/", "-"))
-                    'anyo = Mid(fecha, 7, 4)
-                    'mes = Mid(fecha, 4, 2)
-                    'dia = Mid(fecha, 1, 2)
-                    'hora = Mid(fecha, 12, 8)
-                    'formatFecha = anyo & "-" & mes & "-" & dia & " " & hora
-                    'pagado = If(row("Pagado") Is Nothing, "", formatPagado(row("Pagado").ToString().Replace(",", ".")))
+                    fecha = If(row("Fecha") Is Nothing, "", row("Fecha").ToString().Replace("/", "-"))
+                    anyo = Mid(fecha, 7, 4)
+                    mes = Mid(fecha, 4, 2)
+                    dia = Mid(fecha, 1, 2)
+                    hora = Mid(fecha, 12, 8)
+                    formatFecha = anyo & "-" & dia & "-" & mes & " " & hora
 
                     count += 1
                     contador(count)
 
-                    writerColl.WriteLine(row("IdIncidencia").ToString() & "," & bookId.ToString & "," & internatDebtId.ToString & "," & originalAcountId.ToString & "," & row("Fecha").ToString() & "," & formatPagado(row("Pagado").ToString().Replace(",", ".")))
+                    writerColl.WriteLine(row("IdIncidencia").ToString() & "," & bookId.ToString & "," & internatDebtId.ToString & "," & originalAcountId.ToString & "," & formatFecha & "," & pagado)
                 Next
             End Using
         End Using
@@ -145,9 +150,122 @@ Module Program
         elapsedTime = String.Format("{0:00}:{1:00}:{2:00}", ts.Hours, ts.Minutes, ts.Seconds)
         Console.WriteLine("COLLECTION CREADO. Tiempo: " & elapsedTime.ToString + vbCrLf)
 
+        ' STATUS /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        Dim writerStat As New StreamWriter(IO.Path.Combine(path, "Daily_account_status_report_MC2Legal_" & today & ".csv"))
+        writerStat.WriteLine("InternalBookID,InternalDebtID,OriginalAccountID,DebtStatusID")
+
+        Dim queryStatus As String = "SELECT A.IdAccion, A.IdExpediente, A.idTipoNota, A.Observaciones, 
+                                         (SELECT NumFactura FROM Recibos WHERE IdExpediente = A.IdExpediente) AS NumFactura, (SELECT codigobarras FROM Recibos WHERE IdExpediente = A.IdExpediente) AS codigobarras, (SELECT url FROM Recibos WHERE IdExpediente = A.IdExpediente) AS url, (SELECT IdResultado FROM ResultadoLlamada WHERE IdAccion = A.IdAccion) AS IdResultado
+                                    FROM Acciones A JOIN Expedientes E ON A.IdExpediente = E.IdExpediente 
+                                    WHERE CONVERT(DATE,A.Fecha) >= '" + fechaIni + "' AND CONVERT(DATE,Fecha) < '" + fechaFin + "' AND E.idCliente IN (" + clientes + ") ORDER BY A.Fecha ASC"
+        'Fecha >= CAST(GETDATE() AS DATE) AND E.idCliente IN (" + clientes + ")
+        count = 0
+        Using conn As New SqlConnection(connectionString)
+            Using cmd As New SqlCommand(queryStatus, conn)
+                conn.Open()
+                Dim adapter As New SqlDataAdapter(cmd)
+                Dim dataset As New DataSet()
+                adapter.Fill(dataset, "Acciones")
+
+                For Each row As DataRow In dataset.Tables("Acciones").Rows
+                    originalAcountId = If(row("NumFactura") Is DBNull.Value, "", row("NumFactura").Replace(",", "."))
+                    bookId = If(row("codigobarras") Is Nothing, "", row("codigobarras"))
+                    internatDebtId = If(row("url") Is DBNull.Value, "", row("url").Replace(",", "."))
+                    idTipoNota = If(row("idTipoNota") Is Nothing, "", Convert.ToUInt32(row("idTipoNota")))
+                    observaciones = If(row("Observaciones") Is Nothing, "", row("Observaciones").ToString())
+                    If idTipoNota = 17 Then
+                        If (observaciones.Contains("PAGADO")) Then
+                            debtStatusID = "Paid in Full"
+                        ElseIf (observaciones.Contains("INSOLVENTE")) Then
+                            debtStatusID = "Settled in Full"
+                        Else
+                            debtStatusID = "Litigious"
+                        End If
+                    ElseIf idTipoNota = 802 Then
+                        debtStatusID = "Active"
+                    Else
+                        If row("IdResultado") Is Nothing Then
+                            debtStatusID = "Active"
+                        Else
+                            idResultado = If(Not String.IsNullOrEmpty(row("IdResultado").ToString()), CInt(row("IdResultado")), 0)
+                            debtStatusID = resultadoAccion(CInt(idResultado))
+                        End If
+                    End If
+
+                    count += 1
+                    contador(count)
+
+                    writerStat.WriteLine(bookId.ToString & "," & internatDebtId.ToString & "," & originalAcountId.ToString & "," & debtStatusID.ToString)
+                Next
+            End Using
+        End Using
+        writerStat.Close()
+
+        ts = stopwatch.Elapsed
+        elapsedTime = String.Format("{0:00}:{1:00}:{2:00}", ts.Hours, ts.Minutes, ts.Seconds)
+        Console.WriteLine(vbCrLf + "STATUS CREADO. Tiempo: " & elapsedTime.ToString + vbCrLf)
+
+        ' COMMUNICATION /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        Dim writerComm As New StreamWriter(IO.Path.Combine(path, "Daily_communication_report_MC2Legal_" & today & ".csv"))
+        writerComm.WriteLine("ExternalProviderMessageID,OriginalAccountID,InternalDebtID,ChannelID,ExecutedAt,Direction")
+
+        Dim queryCommunication As String = "SELECT A.IdAccion, A.IdExpediente, TN.idTipoNota, A.Fecha, RL.IdTipoAccion,
+                                             (SELECT NumFactura FROM Recibos WHERE IdExpediente = A.IdExpediente) AS NumFactura,	
+                                             (SELECT url FROM Recibos WHERE IdExpediente = A.IdExpediente) AS url
+                                            FROM Acciones AS A JOIN Expedientes AS E ON A.IdExpediente = E.IdExpediente LEFT JOIN ResultadoLlamada AS RL ON A.IdAccion = RL.IdAccion LEFT JOIN TipoNota AS TN ON A.IdTipoNota = TN.idTipoNota 
+                                            WHERE CONVERT(DATE,A.Fecha) >= '" + fechaIni + "' AND CONVERT(DATE,Fecha) < '" + fechaFin + "' AND E.idCliente IN (" + clientes + ") AND A.idTipoNota IN (5, 7, 8, 9, 10, 11, 13, 14, 15, 22, 79, 80, 81, 656, 742, 744, 746, 788, 789, 820, 821, 822, 823, 824, 825, 826, 827, 828, 831, 832, 834, 836, 837, 840, 849, 854, 861, 915, 917, 918, 921, 922) ORDER BY A.Fecha ASC"
+        'Fecha >= CAST(GETDATE() AS DATE) AND E.idCliente IN (" + clientes + ")
+        count = 0
+        Using conn As New SqlConnection(connectionString)
+            Using cmd As New SqlCommand(queryCommunication, conn)
+                conn.Open()
+                Dim adapter As New SqlDataAdapter(cmd)
+                Dim dataset As New DataSet()
+                adapter.Fill(dataset, "Acciones")
+
+                For Each row As DataRow In dataset.Tables("Acciones").Rows
+                    messageId = row("IdAccion")
+                    originalAcountId = If(row("NumFactura") Is DBNull.Value, "", row("NumFactura").Replace(",", "."))
+                    internatDebtId = If(row("url") Is DBNull.Value, "", row("url").Replace(",", "."))
+                    idTipoNota = If(row("idTipoNota") Is Nothing, "", Convert.ToUInt32(row("idTipoNota")))
+                    channelId = tipoNota(idTipoNota)
+
+                    fecha = If(row("Fecha") Is Nothing, "", row("Fecha").ToString.Replace("/", "-"))
+                    anyo = Mid(fecha, 7, 4)
+                    mes = Mid(fecha, 4, 2)
+                    dia = Mid(fecha, 1, 2)
+                    hora = Mid(fecha, 12, 8)
+                    formatFecha = anyo & "-" & dia & "-" & mes & " " & hora
+
+                    If row("IdTipoAccion") Is Nothing Or row("IdTipoAccion") Is DBNull.Value Then
+                        idTipoAccion = tipoLlamada2(CInt(idTipoNota))
+                    Else
+                        idTipoAccion = tipoLlamada1(CInt(row("IdTipoAccion")))
+                    End If
+
+                    count += 1
+                    contador(count)
+
+                    writerComm.WriteLine(messageId.ToString & "," & originalAcountId.ToString & "," & internatDebtId.ToString & "," & channelId & "," & formatFecha & "," & idTipoAccion.ToString)
+                Next
+
+            End Using
+        End Using
+        writerComm.Close()
+
+        ts = stopwatch.Elapsed
+        elapsedTime = String.Format("{0:00}:{1:00}:{2:00}", ts.Hours, ts.Minutes, ts.Seconds)
+        Console.WriteLine(vbCrLf + "COMMUNICATION CREADO. Tiempo: " & elapsedTime)
+
+        stopwatch.Stop()
+
+        ' COLLECTION /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
         ''Dim cmdIncidencia As New SqlCommand("SELECT I.IdIncidencia, I.IdExpediente, I.Pagado, I.Fecha FROM Incidencias I INNER JOIN Expedientes E ON I.IdExpediente = E.IdExpediente WHERE Fecha >= CAST(GETDATE() AS DATE) AND E.idCliente IN (84, 85, 86, 87, 88, 89, 90, 91) ORDER BY Fecha ASC", connection)
-        ''Dim cmdIncidencia As New SqlCommand("SELECT I.IdIncidencia, I.IdExpediente, I.Pagado, I.Fecha FROM Incidencias I INNER JOIN Expedientes E ON I.IdExpediente = E.IdExpediente WHERE Fecha >= CONVERT(DATETIME, '2024-04-18 00:00:00', 120) AND Fecha < CONVERT(DATETIME, '2024-04-19 00:00:00', 120) AND E.idCliente IN (84, 85, 86, 87, 88, 89, 90, 91) ORDER BY Fecha ASC", connection)
-        'Dim cmdIncidencia As New SqlCommand("SELECT I.IdIncidencia, I.IdExpediente, I.Pagado, I.Fecha FROM Incidencias I INNER JOIN Expedientes E ON I.IdExpediente = E.IdExpediente WHERE CONVERT(DATE,Fecha) >= '01/04/2024' AND CONVERT(DATE,Fecha) < '31/05/2024' AND E.idCliente=91 ORDER BY Fecha ASC", connection)
+        ''Dim cmdIncidencia As New SqlCommand("SELECT I.IdIncidencia, I.IdExpediente, I.Pagado, I.Fecha FROM Incidencias I INNER JOIN Expedientes E ON I.IdExpediente = E.IdExpediente WHERE CONVERT(DATE,Fecha) >= '01/04/2024' AND CONVERT(DATE,Fecha) < '31/05/2024' AND E.idCliente IN (84, 85, 86, 87, 88, 89, 90, 91) ORDER BY Fecha ASC", connection)
+        'Dim cmdIncidencia As New SqlCommand("SELECT I.IdIncidencia, I.IdExpediente, I.Pagado, I.Fecha FROM Incidencias I INNER JOIN Expedientes E ON I.IdExpediente = E.IdExpediente WHERE CONVERT(DATE,Fecha) >= '10/01/2024' AND CONVERT(DATE,Fecha) < '31/05/2024' AND E.idCliente=90 ORDER BY Fecha ASC", connection)
         'Dim rIncidencias As SqlDataReader = cmdIncidencia.ExecuteReader()
         'Dim writerColl As New StreamWriter(IO.Path.Combine(path, "Daily_collection_report_MC2Legal_" & today & ".csv"))
         'writerColl.WriteLine("Payment ID,InternalBookID,InternalDebtID,OriginalAccountID,Timestamp,Amount")
@@ -189,7 +307,7 @@ Module Program
 
         ''Dim cmdAcciones1 As New SqlCommand("SELECT A.IdAccion, A.IdExpediente, A.idTipoNota FROM Acciones A JOIN Expedientes E ON A.IdExpediente = E.IdExpediente WHERE A.Fecha >= CAST(GETDATE() AS DATE) AND E.idCliente in (84,85,86,87,88,89,90,91) ORDER BY A.Fecha ASC", connection)
         ''Dim cmdAcciones1 As New SqlCommand("SELECT A.IdAccion, A.IdExpediente, A.idTipoNota FROM Acciones A JOIN Expedientes E ON A.IdExpediente = E.IdExpediente WHERE A.Fecha >= CONVERT(DATETIME, '2024-04-18 00:00:00', 120) AND Fecha < CONVERT(DATETIME, '2024-04-19 00:00:00', 120) AND E.idCliente in ( ) ORDER BY A.Fecha ASC", connection)
-        'Dim cmdAcciones1 As New SqlCommand("SELECT A.IdAccion, A.IdExpediente, A.idTipoNota, A.Observaciones FROM Acciones A JOIN Expedientes E ON A.IdExpediente = E.IdExpediente WHERE CONVERT(DATE,A.Fecha) >= '27/05/2024' AND CONVERT(DATE,A.Fecha) < '31/05/2024' AND E.idCliente=89 ORDER BY A.Fecha ASC", connection)
+        'Dim cmdAcciones1 As New SqlCommand("SELECT A.IdAccion, A.IdExpediente, A.idTipoNota, A.Observaciones FROM Acciones A JOIN Expedientes E ON A.IdExpediente = E.IdExpediente WHERE CONVERT(DATE,A.Fecha) >= '10/01/2024' AND CONVERT(DATE,A.Fecha) < '31/05/2024' AND E.idCliente=90 ORDER BY A.Fecha ASC", connection)
         'Dim rAcciones1 As SqlDataReader = cmdAcciones1.ExecuteReader()
         'Dim writerStat As New StreamWriter(IO.Path.Combine(path, "Daily_account_status_report_MC2Legal_" & today & ".csv"))
         'writerStat.WriteLine("InternalBookID,InternalDebtID,OriginalAccountID,DebtStatusID")
@@ -296,7 +414,7 @@ Module Program
         ' /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         'connection.Close()
-        stopwatch.Stop()
+        'stopwatch.Stop()
     End Sub
 
     'Sub Main(args As String())
